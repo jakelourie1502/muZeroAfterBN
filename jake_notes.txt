@@ -1,0 +1,3 @@
+MCTS
+0.1 seconds gets about 40 iterations on MCTS - we probably want more like 50 so let's go with 0.15 seconds. 
+this would get through 2m frames in 3 days, ignoring the training time.
