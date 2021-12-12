@@ -22,7 +22,7 @@ class Dynamic(torch.nn.Module):
         self.conv4 = torch.nn.Conv2d(self.hidden_size[0], self.enc_size[0], kernel_size= 3, padding=1)
         self.FC1 = torch.nn.Linear(self.enc_size[0]*self.enc_size[1]*self.enc_size[2],1)
         self.relu = torch.nn.ReLU()
-
+        self.tanh = torch.nn.Tanh()
     
     def forward(self, state, action):
         """State is of shape (bs, enc.channels, enc.h, enc.h) """
@@ -41,7 +41,7 @@ class Dynamic(torch.nn.Module):
         hidden_state = self.conv3(hidden_state)
         hidden_state = self.relu(hidden_state)
         next_state = self.conv4(hidden_state)
-        next_state_final = self.relu(next_state)
+        next_state_final = self.tanh(next_state)
         next_state = torch.flatten(next_state,start_dim=1)
         reward = self.FC1(next_state)
       

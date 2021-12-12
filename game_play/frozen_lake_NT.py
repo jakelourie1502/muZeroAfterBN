@@ -38,7 +38,7 @@ class gridWorld(Environment):
     def __init__(self, size,lakes,goals, n_actions = 4, max_steps = 300, dist = None, seed = None, rnd=0.1):
         
         self.size = size
-        n_states = (size[0]*size[1])+1
+        n_states = (size[0]*size[1])
         Environment.__init__(self, n_states, n_actions, max_steps,dist)
         self.action_dict = {"Up":0, "Right":1, "Down":2,"Left":3}
         self.chance = rnd
@@ -58,8 +58,7 @@ class gridWorld(Environment):
         obs = self.board.copy()
 
         posR, posC = self.stateIdx_to_coors[self.state]
-        if self.state != self.terminal_state:
-            obs[posR, posC] = -1.0
+        obs[posR, posC] = -1.0
         return obs
 
     def step(self, action):
@@ -69,11 +68,10 @@ class gridWorld(Environment):
         self.n_steps += 1
     
         self.state, reward = self.draw(self.state, action)
-        done = (self.n_steps >= self.max_steps) or (self.state == self.terminal_state)
+        done = (self.n_steps >= self.max_steps) or (self.state in self.lakes_and_goals)
         obs = self.board.copy()
         posR, posC = self.stateIdx_to_coors[self.state]
-        if self.state != self.terminal_state:
-            obs[posR, posC] = -1.0
+        obs[posR,posC] = -1
         return obs, self.state, reward, done    
 
 
@@ -94,7 +92,7 @@ class gridWorld(Environment):
         
     def r(self, next_state, state):
         "The method r returns the expected reward in having transitioned from state to next state given action."
-        return self.goal_states_idx[state] if state in self.goal_states_idx else 0
+        return self.goal_states_idx[next_state] if next_state in self.goal_states_idx else 0
     
     def render(self):
         board = self.board.copy()
@@ -104,7 +102,7 @@ class gridWorld(Environment):
         clear_output()
         print(board)
         
-    def create_dicts_and_indexes(self,terminal_state_exist = True):
+    def create_dicts_and_indexes(self,terminal_state_exist = False):
         """
         Inputs... 
          size of lake (tuple e.g. (4,4))
@@ -182,17 +180,18 @@ class gridWorld(Environment):
         
         SA_prob_dict = {}
         lakes_and_goals = list(self.goal_states_idx.keys()) + self.lakes_idx
+        self.lakes_and_goals = lakes_and_goals
         
         for state in range(self.n_states):
             SA_prob_dict[state] = {}
             #### Set the chance of entering an absorbing from lake or goal to 1
             for i in range(4):
                 SA_prob_dict[state][i] = np.zeros((self.n_states,))
-                if state in lakes_and_goals or state == self.terminal_state:
+                if state in lakes_and_goals:
                     for act in range(4):
-                        SA_prob_dict[state][i][self.terminal_state] = 1
+                        SA_prob_dict[state][i][state] = 1
             
-            if state not in lakes_and_goals and state != self.terminal_state:
+            if state not in lakes_and_goals:
                 """For UP"""
                 if not state_is_top(state): #if you're in a normal state, you'll just go up 1
                     SA_prob_dict[state][self.action_dict['Up']][state+move_up()] = 1
@@ -220,14 +219,11 @@ class gridWorld(Environment):
         
     def generate_random_lakes(self,p):
         self.lakes = []
-        number_of_lakes = int((self.n_states-1)*p) 
+        number_of_lakes = int((self.n_states)*p) 
         possible_locations = list(range(self.n_states))
         possible_locations.remove(self.state)
-        possible_locations.remove(self.terminal_state)
-    
         for s in self.goal_states_idx.keys():
             possible_locations.remove(s)
-            
         for i in range(number_of_lakes):
             l = np.random.choice(possible_locations)
             self.lakes.append(self.stateIdx_to_coors[l])

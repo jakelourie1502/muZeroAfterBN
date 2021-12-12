@@ -16,10 +16,11 @@ class Representation(torch.nn.Module):
         self.obs_size = observation_size
         super().__init__()
         self.conv1 = torch.nn.Conv2d(self.obs_size[0],self.hidden_size[0],kernel_size= 3, padding=0) 
-        self.conv2 = torch.nn.Conv2d(self.hidden_size[0],self.hidden_size[0],kernel_size= 3, padding=0) 
+        self.conv2 = torch.nn.Conv2d(self.hidden_size[0],self.hidden_size[0],kernel_size= 3, padding=1) 
         self.conv3 = torch.nn.Conv2d(self.hidden_size[0],self.hidden_size[0],kernel_size= 3, padding=1) 
         self.conv4 = torch.nn.Conv2d(self.hidden_size[0], self.enc_size[0], kernel_size= 3, padding=1)        
         self.relu = torch.nn.ReLU()
+        self.tanh = torch.nn.Tanh()
 
     def forward(self,x):
         x = self.conv1(x)
@@ -29,6 +30,6 @@ class Representation(torch.nn.Module):
         x = self.conv3(x)
         x = self.relu(x)
         x = self.conv4(x)
-        x = self.relu(x)
+        x = self.tanh(x)
         return x
 

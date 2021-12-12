@@ -31,8 +31,7 @@ class MCTS:
             idx+=1
             self.mcts_go(root_node)
         policy, chosen_action = self.randomly_sample_action(self.root_node)
-        print(idx)
-        return policy, chosen_action
+        return policy, chosen_action, root_node.Q
         
     def mcts_go(self,node):
         if len(node.children) == 0:
