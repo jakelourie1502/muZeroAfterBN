@@ -1,7 +1,9 @@
 import numpy as np
-from global_settings import replay_buffer_size, batch_size, observation_size
+from global_settings import replay_buffer_size, batch_size, device
 from global_settings import training_params
+import torch
 class Replay_Buffer():
+
     """
     This is a class that can hold the data required for training
     each tuple is :
@@ -17,69 +19,61 @@ class Replay_Buffer():
         self.default_size = batch_size
         self.size = replay_buffer_size
         self.obs = []
-        self.policy_log = []
         self.action_log = []
         self.reward_logs = []
         self.done_logs = []
         self.fut_val_logs = []
+        self.policy_logs = []
         self.search_val_logs = []
-    
     def add_ep_log(self, metrics):
         """Metrics dictionary of the form
         metrics['obs']
-        metrics['policy']
+        metrics['next_ob']
         metrics['action']
         metrics['reward']
         metrics['done']
         metrics['V']
         """
         self.obs.extend(metrics['obs'])
-        self.policy_log.extend(metrics['policy'])
         self.action_log.extend(metrics['action'])
         self.reward_logs.extend(metrics['reward'])
         self.done_logs.extend(metrics['done'])
         self.fut_val_logs.extend(metrics['V'])
-        self.search_val_logs.extend(metrics['search_value'])
+        self.policy_logs.extend(metrics['policy'])
+        self.search_val_logs.extend(metrics['search_val_logs'])
     
     def purge(self):
         no_of_examples = len(self.obs)
         if no_of_examples > self.size:
             reduc = no_of_examples - self.size
             self.obs = self.obs[reduc: ]
-            self.policy_log = self.policy_log[reduc: ]
             self.action_log = self.action_log[reduc: ]
             self.reward_logs = self.reward_logs[reduc: ]
             self.done_logs = self.done_logs[reduc: ]
             self.fut_val_logs = self.fut_val_logs[reduc: ]
+            self.policy_logs = self.policy_logs[reduc: ]
             self.search_val_logs = self.search_val_logs[reduc: ]
-    
-    def get_sample_uniform(self, prioritised_sampling = True):
+
+    def get_sample(self, prioritised_sampling = True, batch_size = batch_size):
         #### Need to add get sample prioritised.
         
         batch_n = batch_size
         if prioritised_sampling:
-            coefs = np.abs(np.array(self.sample_search_val)-np.array(self.fut_val_logs))
-            coefs = coefs[:-(self.k+1)]
-            coefs = coefs / np.sum(coefs)
-            current_length = len(self.obs)-self.k-1 #we don't want one right at the end or it will break.
+            
+            coefs = torch.abs(torch.tensor(self.search_val_logs)-torch.tensor(self.fut_val_logs))
+            coefs = coefs[:-(self.k)]
+            coefs = coefs / torch.sum(coefs)
+            coefs = np.array(coefs)
+            
+            weights = (1/(coefs*len(self.search_val_logs)))
+            current_length = len(self.obs)-self.k #we don't want one right at the end or it will break.
             indices = np.random.choice(list(range(current_length)),size=batch_n, p=coefs,replace=False)
+            weights = [weights[i] for i in indices]
+            
         else:
-            indices = np.random.randint(low = 0, high = len(self.obs), size = batch_n)
+            indices = np.random.randint(low = 0, high = len(self.obs)-self.k, size = batch_n)
+            weights = np.ones_like(indices)
+        sample_obs = np.array([self.obs[i] for i in indices])
         
-        # sample_obs = np.array([self.obs[i].reshape(observation_size) for i in indices])
-        # sample_policy = np.array([self.policy_log[i] for i in indices])
-        # sample_actions = np.array([self.action_log[i] for i in indices])
-        # sample_imm_rewards = np.array([self.reward_logs[i] for i in indices])
-        # sample_done = np.array([self.done_logs[i] for i in indices])
-        # sample_fut_val = np.array([self.fut_val_logs[i] for i in indices])
-        # sample_search_val = np.array([self.search_val_logs[i] for i in indices])
-        # #### Note: these are all numpy arrays of dimension (m, ...)
-
-        """If you want to have a look at the shapes, types..."""
-        # sample_tuples = sample_obs, sample_policy, sample_actions, sample_imm_rewards, sample_fut_val, sample_done sample_search_val, sample_indicies
-        # print(sample_tuples[0].shape, sample_tuples[1].shape, sample_tuples[2].shape, sample_tuples[3].shape, sample_tuples[4].shape)
-        # print(type(sample_tuples[0]), type(sample_tuples[1]), type(sample_tuples[2]), type(sample_tuples[3]), type(sample_tuples[4]))
+        return torch.tensor(sample_obs).to(device), indices, weights
         
-        
-        # return sample_obs, sample_policy, sample_actions, sample_imm_rewards, sample_done, sample_fut_val, sample_search_val, indices
-        return indices

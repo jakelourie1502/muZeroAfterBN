@@ -1,5 +1,6 @@
 import numpy as np
 from IPython.display import clear_output
+from global_settings import randomly_create_env
 
 class EnvironmentModel:
     
@@ -35,45 +36,80 @@ class Environment(EnvironmentModel):
     
 class gridWorld(Environment):
     
-    def __init__(self, size,lakes,goals, n_actions = 4, max_steps = 300, dist = None, seed = None, rnd=0.1):
+    def __init__(self, size,lakes,goals, n_actions = 4, max_steps = 300, dist = None, seed = None, rnd=0.1, lake_cov=[0.15, 0.25], randomly_create_env = True):
         
         self.size = size
+        self.h = size[0]
+        self.w = size[1]
+        self.corner_idxs = [0,self.w-1,(self.h-1)*self.w,self.h*self.w-1]
+        self.random_create = randomly_create_env
         n_states = (size[0]*size[1])+1
         Environment.__init__(self, n_states, n_actions, max_steps,dist)
         self.action_dict = {"Up":0, "Right":1, "Down":2,"Left":3}
         self.chance = rnd
         self.rnd = rnd
-        self.lakes = lakes
-        self.goal_states = goals
-        self.h = size[0]
-        self.w = size[1]
-        self.reset()
+        if self.random_create:
+            self.pick_random_goal()
+            self.set_starting_pos()
+            self.lakes = []
+            self.create_dicts_and_indexes() #repeat with new lakes
+            self.lake_cov = np.random.uniform(lake_cov[0],lake_cov[1])
+            self.generate_random_lakes(self.lake_cov)    
 
-    def reset(self):
-        self.create_dicts_and_indexes()
+        else:            
+            self.state = np.random.choice(list(range(self.n_states)),p=self.dist)
+            self.goal_states = goals
+            self.lakes = lakes
+            self.create_dicts_and_indexes()
+
         self.create_board()
         self._init_probs_dict()
         self.n_steps = 0
-        self.state = np.random.choice(list(range(self.n_states)),p=self.dist)
-        obs = self.board.copy()
+    
+    def pick_random_goal(self):
+        tl, tl_idx = (0,0) , 0
+        tr, tr_idx = (0,self.w-1) , self.corner_idxs[1]
+        bl, bl_idx = (self.h-1,0) , self.corner_idxs[2]
+        br, br_index = (self.h-1,self.w-1) , self.corner_idxs[3]
+        options = [tl, tr, bl, br]
+        indexes = [tl_idx, tr_idx, bl_idx, br_index]
+        array = np.array([0,1,2,3])
+        chosen = np.random.choice(array)
+        self.goal_states = {options[chosen]:1}
+        self.goal_idx = indexes[chosen]
 
+    def set_starting_pos(self):
+        self.dist = np.zeros((self.h*self.w+1,))
+        for v in range(len(self.dist)-1):
+            if v != self.goal_idx and v in self.corner_idxs:
+                self.dist[v] = 1/3
+        self.state = np.random.choice(list(range(self.n_states)),p=self.dist)
+
+    def reset(self):
+        obs = self.board.copy()
+        blank_board = np.zeros((self.h, self.w))
         posR, posC = self.stateIdx_to_coors[self.state]
         if self.state != self.terminal_state:
-            obs[posR, posC] = -1.0
+            blank_board[posR, posC] = 1.0
+        obs = np.stack((obs, blank_board),axis=0)
         return obs
 
     def step(self, action):
-        if action < 0 or action >= self.n_actions:
-            raise Exception('Invalid_action.')
-            
+        try:
+            if action < 0 or action >= self.n_actions:
+                raise Exception('Invalid_action.')
+        except:
+            print("Here",action)
         self.n_steps += 1
     
         self.state, reward = self.draw(self.state, action)
         done = (self.n_steps >= self.max_steps) or (self.state == self.terminal_state)
         obs = self.board.copy()
+        player_board = np.zeros((self.h,self.w))
         posR, posC = self.stateIdx_to_coors[self.state]
         if self.state != self.terminal_state:
-            obs[posR, posC] = -1.0
+            player_board[posR, posC] = 1.0
+        obs = np.stack((obs, player_board),0)
         return obs, self.state, reward, done    
 
 
@@ -98,13 +134,14 @@ class gridWorld(Environment):
     
     def render(self):
         board = self.board.copy()
+        player_board = np.zeros((self.h,self.w))
         posR, posC = self.stateIdx_to_coors[self.state]
         if self.state != self.terminal_state:
-            board[posR, posC] = -1
-        clear_output()
+            player_board[posR, posC] = 1.0
+        board = np.stack((board, player_board),0)
         print(board)
         
-    def create_dicts_and_indexes(self,terminal_state_exist = True):
+    def create_dicts_and_indexes(self):
         """
         Inputs... 
          size of lake (tuple e.g. (4,4))
@@ -125,9 +162,8 @@ class gridWorld(Environment):
 
                 idx+=1
 
-        if terminal_state_exist:
-            self.coors_to_stateIdx[(-1,-1)] = self.n_states-1
-            self.terminal_state = self.n_states-1
+        self.coors_to_stateIdx[(-1,-1)] = self.n_states-1
+        self.terminal_state = self.n_states-1
 
         self.stateIdx_to_coors = {}
         for k,v in self.coors_to_stateIdx.items():
@@ -186,11 +222,10 @@ class gridWorld(Environment):
         for state in range(self.n_states):
             SA_prob_dict[state] = {}
             #### Set the chance of entering an absorbing from lake or goal to 1
-            for i in range(4):
+            for i in range(self.n_actions):
                 SA_prob_dict[state][i] = np.zeros((self.n_states,))
                 if state in lakes_and_goals or state == self.terminal_state:
-                    for act in range(4):
-                        SA_prob_dict[state][i][self.terminal_state] = 1
+                    SA_prob_dict[state][i][self.terminal_state] = 1
             
             if state not in lakes_and_goals and state != self.terminal_state:
                 """For UP"""
@@ -221,19 +256,34 @@ class gridWorld(Environment):
     def generate_random_lakes(self,p):
         self.lakes = []
         number_of_lakes = int((self.n_states-1)*p) 
-        possible_locations = list(range(self.n_states))
+        possible_locations = list(range(self.n_states-1))
         possible_locations.remove(self.state)
-        possible_locations.remove(self.terminal_state)
-    
         for s in self.goal_states_idx.keys():
             possible_locations.remove(s)
             
         for i in range(number_of_lakes):
             l = np.random.choice(possible_locations)
             self.lakes.append(self.stateIdx_to_coors[l])
-        
-        if (list(self.goal_states_idx.keys())[0] - 1 == 0.5 and list(self.goal_states_idx.keys())[0] - self.w == 0.5) or (self.state + 1 == 0.5 and self.state + self.w == 0.5):
-            self.generate_random_lakes(self, p)
+            possible_locations.remove(l)
+        self.create_dicts_and_indexes()        
+        if not self.board_is_playable():
+            self.generate_random_lakes(p)
+            
+    def board_is_playable(self):
+        if self.goal_states_idx == 0 or self.state == 0:
+            if 1 in self.lakes_idx and self.w in self.lakes_idx:
+                return False
+        if self.goal_states_idx == self.w-1 or self.state == self.w-1:
+            if self.w-2 in self.lakes_idx and 2*self.w-1 in self.lakes_idx:
+                return False
+        if self.goal_states_idx == self.w*(self.h-1) or self.state == self.w*(self.h-1):
+            if self.w*(self.h-1)+1 in self.lakes_idx and self.w*(self.h-2) in self.lakes_idx:
+                return False
+        if self.goal_idx == self.w*self.h - 1 or self.state == self.w*self.h - 1:
+            if self.w*self.h - 2 in self.lakes_idx and self.w*self.h-1 - self.w in self.lakes_idx:
+                return False
+        return True    
+
 
 if __name__ == '__main__':
     size = (12,12)

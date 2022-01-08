@@ -1,0 +1,18 @@
+trials
+zsh 1: one res_block
+zsh 4: 2 res_block
+zsh 5: 2 res_block, extra layer.
+
+Change to make it easy to modify for all lakes and other environments
+1) Remove notion of 'terminal_state_is_true' --> assume it's always true.
+2) Put random start in frozen_lake
+3) Add resBlocks
+4) Put all dimensions for the networks in the global settings
+5) moved epoch_specific parameters to a different function in utils.
+
+
+still to do 
+5) Change value to support as opposed to sigmoid
+6) create JakeMuNet & change optimizers/schedulers etc.
+
+
